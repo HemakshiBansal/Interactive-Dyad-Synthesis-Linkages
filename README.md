@@ -15,7 +15,7 @@ full motion range while enforcing Grashof-validity for physically realizable mot
 - Animated mechanism configurations validated against closed-form kinematic theory
 
 ## How to run
-[brief instructions — e.g. "Open index.html in a browser" or however yours works]
+Download `240446_Hemakshi_5_Point_Synthesis.html` (or the 4-point version) and open it directly in any web browser — no installation or build step required.
 
 ## Acknowledgment
 Built on Burmester dyad-synthesis theory and course material provided by 
