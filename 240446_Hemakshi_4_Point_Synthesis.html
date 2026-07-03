@@ -1,0 +1,334 @@
+<script>
+</script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ME252 Prof's 4-Point Synthesis</title>
+    <style>
+        body { font-family: sans-serif; background: #1e1e1e; color: #fff; margin: 0; padding: 20px; display: flex; gap: 20px; height: 100vh; box-sizing: border-box; overflow: hidden;}
+        canvas { background: #ffffff; border: 2px solid #555; cursor: crosshair; box-shadow: 0 4px 10px rgba(0,0,0,0.5); flex-shrink: 0; }
+        .controls { width: 350px; background: #252525; padding: 20px; border-radius: 8px; border: 1px solid #444; overflow-y: auto; height: 100%; box-sizing: border-box;}
+        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid #444; padding-bottom: 10px; color: #fff;}
+        .info { background: #004d40; padding: 10px; border-left: 4px solid #00bfa5; margin-bottom: 20px; font-size: 0.9rem; }
+        label { display: block; margin-top: 15px; font-weight: bold; color: #bbb; font-size: 0.9rem; display: flex; justify-content: space-between;}
+        input[type="range"] { width: 100%; margin-top: 5px; }
+        input[type="number"] { width: 100%; padding: 5px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; box-sizing: border-box; text-align: center;}
+        .phi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 5px;}
+        button { margin-top: 20px; width: 100%; padding: 10px; background: #007acc; color: white; border: none; cursor: pointer; font-weight: bold; border-radius: 4px; }
+        button:hover { background: #005f9e; }
+        button.danger { background: #c0392b; }
+        button.danger:hover { background: #a93226; }
+        .section-split { padding-top: 10px; margin-top: 10px; border-top: 1px dashed #444; }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #777; }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas" width="600" height="600"></canvas>
+
+<div class="controls">
+    <h2>Prof's Exact Code Logic</h2>
+    <div id="status" class="info">Click the canvas to place Point 1 (of 4).</div>
+    
+    <div class="section-split">
+        <label>Zoom Level: <span id="valZoom">1.0x</span></label>
+        <input type="range" id="zoomSlider" min="5" max="60" value="20">
+    </div>
+
+    <div class="section-split">
+        <label>Input Angles (&phi; in degrees):</label>
+        <div class="phi-grid">
+            <div><small>&phi;2</small><input type="number" id="phi2" value="12"></div>
+            <div><small>&phi;3</small><input type="number" id="phi3" value="34"></div>
+            <div><small>&phi;4</small><input type="number" id="phi4" value="84"></div>
+        </div>
+    </div>
+
+    <div class="section-split">
+        <label>Dyad 1 Free Choice (&gamma;2): <span id="valG1">20&deg;</span></label>
+        <input type="range" id="gam1" min="0" max="360" value="20">
+        
+        <label>Dyad 2 Free Choice (&gamma;2): <span id="valG2">345&deg;</span></label>
+        <input type="range" id="gam2" min="0" max="360" value="345">
+    </div>
+
+    <div class="section-split">
+        <label>Animation Speed: <span id="valSpeed">1x</span></label>
+        <input type="range" id="animSpeed" min="0.1" max="3" step="0.1" value="1">
+    </div>
+
+    <button id="btnClear" class="danger">Clear Canvas</button>
+</div>
+
+<script>
+// --- EXACT MATLAB COMPLEX MATH ---
+class C {
+    constructor(r, i=0) { this.r=r; this.i=i; }
+    add(c) { return new C(this.r+c.r, this.i+c.i); }
+    sub(c) { return new C(this.r-c.r, this.i-c.i); }
+    mul(c) { return new C(this.r*c.r - this.i*c.i, this.r*c.i + this.i*c.r); }
+    div(c) { let d = c.r*c.r + c.i*c.i; return new C((this.r*c.r + this.i*c.i)/d, (this.i*c.r - this.r*c.i)/d); }
+    conj() { return new C(this.r, -this.i); }
+    magSq() { return this.r*this.r + this.i*this.i; }
+    mag() { return Math.sqrt(this.magSq()); }
+    arg() { return Math.atan2(this.i, this.r); }
+}
+function ex(ang) { return new C(Math.cos(ang), Math.sin(ang)); }
+
+function getPhi() {
+    return [
+        0,
+        parseFloat(document.getElementById('phi2').value) || 0,
+        parseFloat(document.getElementById('phi3').value) || 0,
+        parseFloat(document.getElementById('phi4').value) || 0
+    ].map(d => d * Math.PI / 180);
+}
+
+// --- EXACT MATLAB TRANSLATION: Burmester4A ---
+function Burmester4A(R, phi, gam2, motion_path) {
+    let d = [new C(0), R[1].sub(R[0]), R[2].sub(R[0]), R[3].sub(R[0])];
+    let e = (ang) => ex(ang).sub(new C(1));
+
+    let D2 = d[2].mul(e(phi[3])).sub(d[3].mul(e(phi[2])));
+    let D3 = d[3].mul(e(phi[1])).sub(d[1].mul(e(phi[3])));
+    let D4 = d[1].mul(e(phi[2])).sub(d[2].mul(e(phi[1])));
+    let D1 = e(gam2).mul(D2).sub(D3).sub(D4);
+
+    let A = D1.conj().mul(D3).r, B = D1.conj().mul(D3).i;
+    let C_val = D1.magSq() + D3.magSq() - D4.magSq();
+
+    let disc = 4*A*A + 4*B*B - C_val*C_val;
+    if (disc < 0) return null; // Imaginary rotations
+
+    let gam3 = 2 * Math.atan((2*B - Math.sqrt(disc)) / (C_val - 2*A));
+    
+    let num = D1.add(ex(gam3).mul(D3));
+    let den = D4.mul(new C(-1));
+    let q = num.div(den);
+    let gam4 = Math.atan2(q.i, q.r);
+
+    let aa11 = e(phi[1]), aa12 = e(gam2);
+    let aa21 = e(phi[2]), aa22 = e(gam3);
+    let det = aa11.mul(aa22).sub(aa12.mul(aa21));
+
+    let dyad1 = aa22.mul(d[1]).sub(aa12.mul(d[2])).div(det); 
+    let dyad2 = new C(-1).mul(aa21).mul(d[1]).add(aa11.mul(d[2])).div(det); 
+
+    let Z2, Z3;
+    // Exactly mirroring Prof's motion_or_path == 1 logic
+    if (motion_path === 1) {
+        Z2 = dyad2; 
+        Z3 = dyad1;
+    } else {
+        Z2 = dyad1; 
+        Z3 = dyad2;
+    }
+    
+    let Z0 = R[0].sub(Z2).sub(Z3);
+    return { Z0, Z2, Z3 };
+}
+
+// --- EXACT MATLAB TRANSLATION: FoBar_Pos_Analysis ---
+function FoBar_Pos_Analysis(Z0, Z2, Z5, Z0p, Z4, Z6, TH) {
+    let Z1 = Z0p.sub(Z0);
+    let Z3 = Z5.sub(Z6);
+    let Z2n = Z2.mul(ex(TH));
+    let CC = Z1.sub(Z2n);
+
+    let A = Z3.mag(), Gamma_0 = Z3.arg();
+    let B = Z4.mag(), Psi_0 = Z4.arg();
+    let C_val = CC.mag(), Theta_C = CC.arg();
+
+    let ratio1 = (C_val*C_val + B*B - A*A) / (2*B*C_val);
+    let ratio2 = (C_val*C_val + A*A - B*B) / (2*A*C_val);
+
+    if (Math.abs(ratio1) > 1 || Math.abs(ratio2) > 1) return null; // Imaginary rotations
+
+    let acos1 = Math.acos(ratio1);
+    let acos2 = Math.acos(ratio2);
+    
+    // Chace Solution 1
+    let Theta_B1 = Theta_C - acos1;
+    let PS1 = Theta_B1 + Math.PI - Psi_0;
+    let Theta_A1 = Theta_C + acos2;
+    let GM1 = Theta_A1 - Gamma_0;
+
+    // Chace Solution 2
+    let Theta_B2 = Theta_C + acos1;
+    let PS2 = Theta_B2 + Math.PI - Psi_0;
+    let Theta_A2 = Theta_C - acos2;
+    let GM2 = Theta_A2 - Gamma_0;
+
+    // Phase wrapping exactly as written in MATLAB
+    let wrap = (v) => {
+        let out = v;
+        while (out > 2*Math.PI) out -= 2*Math.PI;
+        while (out < -2*Math.PI) out += 2*Math.PI;
+        return out;
+    };
+
+    PS1 = wrap(PS1); GM1 = wrap(GM1);
+    PS2 = wrap(PS2); GM2 = wrap(GM2);
+
+    // EXACT MATLAB BRANCH SELECTOR
+    // [~, ind] = min(abs(PS-Psi_0)+abs(GM-Gamma_0));
+    let err1 = Math.abs(PS1 - Psi_0) + Math.abs(GM1 - Gamma_0);
+    let err2 = Math.abs(PS2 - Psi_0) + Math.abs(GM2 - Gamma_0);
+
+    let PSn = err1 < err2 ? PS1 : PS2;
+    let GMn = err1 < err2 ? GM1 : GM2;
+
+    return {
+        Z2n, PSn, GMn,
+        Z5n: Z5.mul(ex(GMn)), 
+        Z4n: Z4.mul(ex(PSn)), 
+        Z6n: Z6.mul(ex(GMn))
+    };
+}
+
+// --- UI & Rendering State ---
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const origin = { x: 300, y: 300 };
+let scale = 20;
+
+let points = [];
+let d1 = null, d2 = null;
+let anim_th = 0, anim_dir = 1;
+
+function toW(cx, cy) { return new C((cx - origin.x)/scale, -(cy - origin.y)/scale); }
+function toC(c) { return { x: c.r*scale + origin.x, y: -c.i*scale + origin.y }; }
+
+canvas.addEventListener('mousedown', (e) => {
+    if (points.length >= 4) return;
+    const rect = canvas.getBoundingClientRect();
+    points.push(toW(e.clientX - rect.left, e.clientY - rect.top));
+    
+    document.getElementById('status').innerText = `Placed Point ${points.length}.`;
+    if (points.length === 4) synthesize();
+    draw();
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+    points = []; d1 = null; d2 = null;
+    document.getElementById('status').innerText = "Click the canvas to place Point 1.";
+    draw();
+});
+
+document.getElementById('zoomSlider').addEventListener('input', (e) => {
+    scale = parseInt(e.target.value);
+    document.getElementById('valZoom').innerText = (scale / 20).toFixed(1) + 'x';
+});
+
+['gam1', 'gam2'].forEach(id => {
+    document.getElementById(id).addEventListener('input', (e) => {
+        document.getElementById(id === 'gam1' ? 'valG1' : 'valG2').innerText = e.target.value + '°';
+        if (points.length === 4) synthesize();
+    });
+});
+
+['phi2', 'phi3', 'phi4'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        if (points.length === 4) synthesize();
+    });
+});
+
+document.getElementById('animSpeed').addEventListener('input', (e) => {
+    document.getElementById('valSpeed').innerText = e.target.value + 'x';
+});
+
+function synthesize() {
+    let currentPhi = getPhi();
+    let g1 = parseFloat(document.getElementById('gam1').value) * Math.PI/180;
+    let g2 = parseFloat(document.getElementById('gam2').value) * Math.PI/180;
+    
+    // Hardcoding motion_path = 1 exactly as the Prof's script does
+    let motion_path = 1;
+    
+    d1 = Burmester4A(points, currentPhi, g1, motion_path);
+    d2 = Burmester4A(points, currentPhi, g2, motion_path);
+    
+    if (!d1 || !d2) {
+        document.getElementById('status').innerText = "Limit exceeded. Try adjusting Phi or Gamma.";
+    } else {
+        document.getElementById('status').innerText = "Mechanism active.";
+    }
+    
+    anim_th = 0;
+}
+
+function line(p1, p2, c, w) { ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = c; ctx.lineWidth = w; ctx.stroke(); }
+function circ(p, c) { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fillStyle = c; ctx.fill(); ctx.stroke(); }
+
+function draw() {
+    ctx.clearRect(0, 0, 600, 600);
+    
+    // Grid matches Prof's white canvas default
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+    let startX = origin.x % scale;
+    let startY = origin.y % scale;
+    for(let i = startX; i < 600; i += scale) { ctx.strokeRect(i, 0, 1, 600); }
+    for(let i = startY; i < 600; i += scale) { ctx.strokeRect(0, i, 600, 1); }
+
+    // Trace path
+    if (d1 && d2) {
+        ctx.beginPath();
+        let started = false;
+        // Sweeping full circle to draw trace
+        for (let th = 0; th <= Math.PI*2; th += 0.05) {
+            let res = FoBar_Pos_Analysis(d1.Z0, d1.Z2, d1.Z3, d2.Z0, d2.Z2, d2.Z3, th);
+            if (res) {
+                let pt = toC(d1.Z0.add(res.Z2n).add(res.Z5n));
+                if (!started) { ctx.moveTo(pt.x, pt.y); started = true; } 
+                else { ctx.lineTo(pt.x, pt.y); }
+            }
+        }
+        ctx.strokeStyle = '#00bfa5'; ctx.lineWidth = 2; ctx.stroke();
+    }
+
+    // Precision Points
+    points.forEach((p, i) => {
+        let cp = toC(p);
+        circ(cp, '#e74c3c');
+        ctx.fillStyle = '#000'; ctx.fillText(`P${i+1}`, cp.x+8, cp.y-8);
+    });
+
+    // Mechanism Animation
+    if (d1 && d2) {
+        let speedMult = parseFloat(document.getElementById('animSpeed').value);
+        let res = FoBar_Pos_Analysis(d1.Z0, d1.Z2, d1.Z3, d2.Z0, d2.Z2, d2.Z3, anim_th);
+        
+        if (res) {
+            let pZ0 = toC(d1.Z0), pZ0p = toC(d2.Z0);
+            let pA = toC(d1.Z0.add(res.Z2n)), pP = toC(d1.Z0.add(res.Z2n).add(res.Z5n));
+            let pB = toC(d2.Z0.add(res.Z4n));
+
+            // Ground
+            line(pZ0, pZ0p, '#000', 4);         
+            // Dyad 1 (Green in prof's code)
+            line(pZ0, pA, '#2ecc71', 4);        
+            line(pA, pP, '#2ecc71', 4);         
+            // Dyad 2 
+            line(pZ0p, pB, '#3498db', 4);       
+            line(pB, pP, '#3498db', 4);         
+            // Coupler base
+            line(pA, pB, '#e67e22', 3);         
+
+            [pZ0, pZ0p, pA, pB, pP].forEach(pt => circ(pt, '#000'));
+            anim_th += anim_dir * 0.02 * speedMult;
+        } else {
+            anim_dir *= -1; 
+            anim_th += anim_dir * 0.04 * speedMult; 
+        }
+    }
+    requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>
